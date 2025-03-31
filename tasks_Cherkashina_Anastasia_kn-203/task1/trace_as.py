@@ -2,13 +2,17 @@ import subprocess
 import socket
 import re
 import sys
+import urllib.request
+import json
 from typing import List, Tuple
+
 
 def resolve_host(target: str) -> str:
     try:
         return socket.gethostbyname(target)
     except socket.gaierror:
         sys.exit(1)
+
 
 def run_traceroute(target: str) -> List[str]:
     try:
@@ -25,6 +29,7 @@ def run_traceroute(target: str) -> List[str]:
     except subprocess.TimeoutExpired:
         sys.exit(1)
 
+
 def extract_ips(traceroute_output: List[str]) -> List[str]:
     ip_regex = re.compile(r'(\d+\.\d+\.\d+\.\d+)')
     hops = []
@@ -35,6 +40,16 @@ def extract_ips(traceroute_output: List[str]) -> List[str]:
         if match:
             hops.append(match[-1])
     return hops
+
+
+def geoip_country(ip: str) -> str:
+    try:
+        with urllib.request.urlopen(f"https://ipinfo.io/{ip}/json", timeout=5) as response:
+            data = json.load(response)
+            return data.get("country", "N/A")
+    except:
+        return "N/A"
+
 
 def whois_lookup(ip: str) -> Tuple[str, str, str]:
     try:
@@ -52,25 +67,29 @@ def whois_lookup(ip: str) -> Tuple[str, str, str]:
 
         sock.close()
         text = response.decode(errors="ignore")
-        asn = re.search(r'origin:\s*(AS\d+)', text)
-        org = re.search(r'org-name:\s*(.+)', text)
-        country = re.search(r'country:\s*(\w+)', text)
+
+        asn = re.search(r'origin:\s*(AS\d+)', text, re.IGNORECASE)
+        org = re.search(r'(org-name|OrgName|descr):\s*(.+)', text, re.IGNORECASE)
+
+        country = geoip_country(ip)
 
         return (
             asn.group(1) if asn else "N/A",
-            country.group(1) if country else "N/A",
-            org.group(1).strip() if org else "N/A"
+            country,
+            org.group(2).strip() if org else "N/A"
         )
     except socket.timeout:
         return ("Timeout", "-", "-")
     except Exception:
         return ("Error", "-", "-")
 
+
 def print_table(hops: List[str], whois_data: List[Tuple[str, str, str]]):
     print("\n№ | IP Address        | AS        | Country | Provider")
     print("--+------------------+-----------+---------+--------------------------")
     for i, (ip, (asn, country, provider)) in enumerate(zip(hops, whois_data), 1):
         print(f"{i:<2}| {ip:<16} | {asn:<9} | {country:<7} | {provider}")
+
 
 def main():
     if len(sys.argv) != 2 or sys.argv[1] in ("--help", "-h"):
@@ -86,5 +105,8 @@ def main():
 
     print_table(hops, whois_info)
 
+
 if __name__ == '__main__':
     main()
+
+    # запускать так: python tasks_Cherkashina_Anastasia_kn-203\task1\trace_as.py <доменное имя>

@@ -1,8 +1,4 @@
 import pytest
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tasks')))
-
 from trace_as import resolve_host, extract_ips, whois_lookup
 
 def test_resolve_host_valid():
